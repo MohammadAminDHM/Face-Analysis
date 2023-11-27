@@ -66,22 +66,41 @@ if uploaded_image is not None:
 # Let the user upload a video
 st.sidebar.header("Upload Video")
 uploaded_video = st.sidebar.file_uploader("Choose a video...", type=["mp4", "mov", "avi"])
+FRAME_WINDOW = st.image([])
 if uploaded_video is not None:
     tfile = tempfile.NamedTemporaryFile(delete=False) 
     tfile.write(uploaded_video.read())
-    
-    st.video(uploaded_video)    
 
     video_file = cv2.VideoCapture(tfile.name)
     while video_file.isOpened():
         ret, frame = video_file.read()
         if not ret:
             break
-        frame = model(frame)
-        st.image(frame, use_column_width=True)
+        old_image_height, old_image_width, channels = frame.shape
+    
+        # create new image of desired size and color (blue) for padding
+        new_image_width = 2 * old_image_width
+        new_image_height = 2 * old_image_height
+        color = (255,255,255)
+        result = np.full((new_image_height, new_image_width, channels), color, dtype=np.uint8)
         
+        # compute center offset
+        x_center = (new_image_width - old_image_width) // 2
+        y_center = (new_image_height - old_image_height) // 2
+        
+        # copy img image into center of result image
+        result[y_center:y_center+old_image_height, 
+            x_center:x_center+old_image_width] = frame
+        frame = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+        frame = cv2.resize(frame, (512, 512))
+        frame = model(frame)
+        try:
+            FRAME_WINDOW.image(frame)
+        except:
+            pass                        
 
     video_file.release()
+
 # Webcam input (this requires opencv)
 st.sidebar.header("Webcam")
 run_webcam = st.sidebar.button('Start Webcam')
@@ -92,9 +111,10 @@ if run_webcam:
         ret, frame = cap.read()
         if not ret:
             break
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame = model(frame)
+
         try:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)        
+            frame = model(frame)
             FRAME_WINDOW.image(frame)
         except:
             pass

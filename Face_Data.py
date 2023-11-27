@@ -3,17 +3,37 @@ import numpy as np
 from Mask_detection import mask_detection as md
 from Skin_Disease_detection import skin_disease_detection as sdd
 
-def increase_brightness(img, value=30):
+def calculate_average_brightness(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    h, s, v = cv2.split(hsv)
+    _, _, v = cv2.split(hsv)
+    return np.mean(v)
 
-    lim = 255 - value
-    v[v > lim] = 255
-    v[v <= lim] += value
+def increase_brightness(img, value=None):
+    try:
+        # Calculate average brightness if value is not provided
+        if value is None:
+            average_brightness = calculate_average_brightness(img)
+            # Adjust the value based on average brightness
+            # For example, less adjustment if the image is already bright
+            if average_brightness > 50:  # Image is bright
+                value = max(30 - (average_brightness - 50) // 2, 0)
+            else:  # Image is dark
+                value = 30
 
-    final_hsv = cv2.merge((h, s, v))
-    img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
-    return img
+        # Brightness adjustment process
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        h, s, v = cv2.split(hsv)
+
+        lim = 255 - value
+        v[v > lim] = 255
+        v[v <= lim] += value
+
+        final_hsv = cv2.merge((h, s, v))
+        img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+        return img
+    except Exception as e:
+        print("Error:", e)
+        return img
 
 def highlightFace(net, frame, conf_threshold=0.7):
     frame          = np.array(frame)
@@ -46,7 +66,7 @@ def face_data(net_face, net_gender, net_age, net_md, net_sdd, frame):
     ageList=['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
     genderList=['Male','Female']
     MODEL_MEAN_VALUES = (78.4263377603, 87.7689143744, 114.895847746)
-    padding=20
+    padding=10
     
     # Face Detection
     resultImg, faceBoxes = highlightFace(net_face, frame)
@@ -61,24 +81,25 @@ def face_data(net_face, net_gender, net_age, net_md, net_sdd, frame):
                 :min(faceBox[2] + padding,
                 frame.shape[1] - 1)]
         
-        # clahe = cv2.createCLAHE(clipLimit=10.0, tileGridSize=(10,10))
+        # clahe = cv2.createCLAHE(clipLimit=5.0, tileGridSize=(10, 10))
         # face = cv2.cvtColor(face, cv2.COLOR_BGR2LAB)
         # face = list(cv2.split(face))
 
         # face[0] = clahe.apply(face[0])
         # face = cv2.merge(face)
         # face = cv2.cvtColor(face, cv2.COLOR_LAB2BGR)
-        
-        #face = cv2.cvtColor(face, cv2.COLOR_BGR2YCrCb)
-        #face[:, :, 0] = cv2.equalizeHist(face[:, :, 0])
-        #face = cv2.cvtColor(face, cv2.COLOR_YCrCb2BGR)
-        face = increase_brightness(face, value=40)
-        
-        resultImg[max(0, faceBox[1]-padding):
-                min(faceBox[3] + padding,
-                frame.shape[0] - 1), max(0, faceBox[0] - padding)
-                :min(faceBox[2] + padding,
-                frame.shape[1] - 1)] = face
+        try:
+            face = cv2.cvtColor(face, cv2.COLOR_BGR2YCrCb)
+            face[:, :, 0] = cv2.equalizeHist(face[:, :, 0])
+            face = cv2.cvtColor(face, cv2.COLOR_YCrCb2BGR)            
+        except:
+            pass
+        face = increase_brightness(face)
+        # resultImg[max(0, faceBox[1]-padding):
+        #         min(faceBox[3] + padding,
+        #         frame.shape[0] - 1), max(0, faceBox[0] - padding)
+        #         :min(faceBox[2] + padding,
+        #         frame.shape[1] - 1)] = face
         
         # Mask Detection
         maskNetOutput = md(face, net_md)
